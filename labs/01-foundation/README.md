@@ -29,11 +29,11 @@ gcc -Wall -Wextra -std=c11 labs/01-foundation/hk_telemetry.c -o hk
 See `requirements.md`, `test_hk.c`, and `traceability.md` in this directory.
 
 ```sh
-gcc -Wall -Wextra -std=c11 -DHK_UNIT_TEST labs/01-foundation/test_hk.c -o test_hk
+gcc -Wall -Wextra -std=c11 labs/01-foundation/test_hk.c -o test_hk
 ./test_hk
 ```
 
-`test_hk.c` compiles `hk_telemetry.c` directly with `HK_UNIT_TEST` defined, which suppresses
-that file's own `main()` so the two can be linked together as one translation unit without a
-duplicate-symbol conflict, while keeping `sample_state()`, `apply_limits()`, and
-`emit_hk_frame()` as the single implementation shared by both the program and its tests.
+`test_hk.c` starts with `#define HK_UNIT_TEST` and then `#include "hk_telemetry.c"`, which
+suppresses that file's own `main()` (guarded by `#ifndef HK_UNIT_TEST`) so the two share
+exactly one implementation of `sample_state()`, `apply_limits()`, and `emit_hk_frame()`
+without a duplicate-symbol conflict, and without needing a `-D` build flag.
