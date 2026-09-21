@@ -41,4 +41,19 @@ same trick `test_hk.c` uses, so that file's own `main()` stays out of the way).
 
 ## Session 6 - four task system (`hk_freertos_ipc.c`)
 
-See the docs note and code comments there; summary in the top-level `docs/03-rtos-ipc.md`.
+Adds two tasks on top of the Session 5 pipeline:
+
+- `vReporterTask` (priority `tskIDLE_PRIORITY + 1`, 1 Hz): takes `xStatsMutex`, reads the
+  shared `hk_stats` block (`nominal_frames`, `safe_frames`, `min_voltage`, `max_voltage`),
+  prints a summary line, releases the mutex.
+- `vSafeModeTask` (priority `tskIDLE_PRIORITY + 3`): blocked on `xSafeModeSem` (a binary
+  semaphore) until `vSamplerTask` signals a SAFE-mode entry, then prints a response line -
+  the placeholder for a real FDIR action later in the program.
+
+`vSamplerTask` gains a fifth job, `update_stats()`, which takes `xStatsMutex` before touching
+`g_stats` and releases it immediately after - the same mutex the reporter uses, so the two
+can never observe or corrupt a half-updated struct.
+
+Priorities (rate monotonic for the two periodic tasks, safety-escalated for the aperiodic
+handler): `sampler(4) > safemode(3) > telemetry(2) > reporter(1)`. See
+`docs/04-rtos-ipc.md` for the mutex-vs-semaphore rationale and the race condition it closes.
