@@ -12,6 +12,20 @@
   the payload. Reuses `spacecraft_state` / `sample_state()` / `apply_limits()` from
   `labs/01-foundation/hk_telemetry.c` unchanged.
 
+### Session 8 - uplink path
+
+- `tc.h` / `tc.c` - TC packet validation and parsing (`tc_parse()`): size sanity, `data_length`
+  consistency, CRC-16 packet error control, primary-header and PUS-C checks, plus the
+  ground-side `tc_build()` used by the self checks.
+- `verify.h` / `verify.c` - PUS Service 1 verification reports (`build_verification()`, subtypes
+  1-8, with a failure code on the failure reports) and the TM[17,2] connection test report.
+- `uplink.h` / `uplink.c` - `dispatch()` on the `(service, subtype)` pair, a one-entry command
+  table (TC[17,1]), and `uplink_handle_tc()` which sequences validate -> TM[1,1]/[1,2] ->
+  execute -> TM[17,2] -> TM[1,7]/[1,8], honoring the ack flags.
+- `uplink_test.c` - assert-based self checks: valid TC[17,1], unknown command, malformed
+  packets, CRC, ack flags, and a sweep proving no truncated or bit-flipped variant of a valid
+  command is ever executed. Run from `main.c` after the Session 7 HK demo.
+
 ## Build and run
 
 ```sh
@@ -57,3 +71,16 @@ gcc -Wall -Wextra -std=c11 labs/03-tmtc/*.c -o tmtc
 | `41 B0 00 00` | temp_obc (f32 BE) | 22.0 |
 | `41 90 00 00` | temp_batt (f32 BE) | 18.0 |
 | `01` | mode | 1 (MODE_NOMINAL) |
+
+## Telecommand packet layout (Session 8)
+
+```
+[ CCSDS primary : 6 B ][ PUS TC sec hdr : 5 B ][ app data : N B ][ PEC : 2 B ]
+  type=1, APID 0x065      ver|ack, svc, sub, src   (N = 0 for TC[17,1])   CRC-16
+```
+
+- Verification reports (`TM[1,x]`) carry the command's packet id and sequence control
+  (the first two 16-bit words of its primary header); failure reports add a 1-byte failure code.
+- Annotated accepted / rejected command hex is in `docs/06-tc-verification.md`.
+- Service/subtype numbers are taken from the session text and are **not yet verified against
+  ECSS-E-ST-70-41**; see the same document.

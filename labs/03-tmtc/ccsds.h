@@ -36,4 +36,9 @@ void ccsds_parse_primary(const uint8_t *buf, ccsds_pri_hdr *h);
  * value is enough to demonstrate routing-by-APID here. */
 #define CCSDS_APID_HK 0x064 /* 100 decimal, arbitrary but fixed */
 
+/* Command-handling application used by the Session 8 uplink path: the APID
+ * every TC is addressed to, and the APID the Service 1 / Service 17 reports
+ * it produces are sent from. Also a lab-assigned value, not a mission one. */
+#define CCSDS_APID_CMD 0x065 /* 101 decimal */
+
 #endif /* CCSDS_H */

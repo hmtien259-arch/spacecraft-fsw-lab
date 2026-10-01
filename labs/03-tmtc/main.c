@@ -1,6 +1,7 @@
 /* labs/03-tmtc/main.c
  *
- * Session 7 practical task - HK as a CCSDS TM Packet.
+ * Session 7 practical task - HK as a CCSDS TM Packet - followed by the
+ * Session 8 uplink self checks (telecommand parse, dispatch, verification).
  *
  * Wraps the Session 3/4 HK frame in a real CCSDS Space Packet with a PUS
  * Service 3 (Housekeeping) secondary header: same data, standards
@@ -17,6 +18,7 @@
 
 #include "ccsds.h"
 #include "pus.h"
+#include "uplink.h"
 
 #include <assert.h>
 #include <stdio.h>
@@ -141,6 +143,9 @@ int main(void) {
         seq_count = (uint16_t) ((seq_count + 1) % 16384); /* HK-REQ-004-style, for packets */
     }
 
-    printf("\nall %d HK TM packets built, packed, and round-trip verified\n", HK_NUM_CYCLES);
+    printf("\nall %d HK TM packets built, packed, and round-trip verified\n\n", HK_NUM_CYCLES);
+
+    /* Session 8: the uplink half of the same TM/TC layer. */
+    uplink_selfcheck();
     return 0;
 }
