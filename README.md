@@ -12,7 +12,7 @@ spacecraft-fsw-lab/
 |-- labs/
 |   |-- 01-foundation/    # Sessions 3-4: HK telemetry, requirements, tests, traceability
 |   |-- 02-rtos/          # Sessions 5-6: FreeRTOS HK pipeline, IPC, shared resource protection
-|   |-- 03-tmtc/          # Session 7+: CCSDS Space Packet / PUS TM packets
+|   |-- 03-tmtc/          # Sessions 7-8: CCSDS/PUS TM packets, TC parsing, verification
 |   |-- 04-obdh/          # OBDH module (upcoming)
 |   `-- 05-fdir/          # FDIR module (upcoming)
 |-- capstone/             # capstone flight software stack
