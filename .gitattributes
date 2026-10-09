@@ -1,0 +1,2 @@
+# Normalise line endings so Windows checkouts do not add CRLF noise to PR diffs.
+* text=auto eol=lf

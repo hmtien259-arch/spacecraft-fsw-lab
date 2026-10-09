@@ -1,4 +1,4 @@
-# Lab 03 - TM/TC: HK as a CCSDS/PUS TM Packet
+# Lab 03 - TM/TC: CCSDS/PUS Telemetry (Session 7) and Telecommand Verification (Session 8)
 
 ## Files
 

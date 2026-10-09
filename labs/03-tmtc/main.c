@@ -108,7 +108,10 @@ static void self_check_sequence_wrap(void) {
     printf("PASS sequence count wraps 16383 -> 0\n");
 }
 
-int main(void) {
+/* Weak so that this directory can be linked together with labs/04-obdh (the
+ * Session 9 build compiles both directories into one binary) and let that
+ * lab supply its own main(); built on its own, this is still the entry point. */
+__attribute__((weak)) int main(void) {
     self_check_sequence_wrap();
     printf("\n");
 
