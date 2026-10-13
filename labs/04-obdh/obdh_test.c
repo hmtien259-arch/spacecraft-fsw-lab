@@ -11,7 +11,11 @@
  *      increasing onboard time and keep order
  *   E. robustness: malformed telemetry, corrupt TC, NULL arguments
  *
- * Owns main() for the Session 9 build (labs/03-tmtc's main is weak).
+ * Owns main() for the Session 9 build (labs/03-tmtc's main is weak). When
+ * labs/05-fdir is linked in too (Session 10 build), this main() runs the
+ * Session 9 checks and then chains to fdir_selfcheck(), found through a weak
+ * reference - so each build is a regression of everything before it, and no
+ * two mains ever compete for the symbol.
  */
 #include "obdh.h"
 
@@ -360,6 +364,11 @@ static void check_robustness(void) {
     printf("PASS robustness: malformed TM dropped and counted; corrupt TC rejected via TM[1,2]; no crashes on NULL\n\n");
 }
 
+/* Present only when labs/05-fdir is part of the link (weak reference: NULL
+ * otherwise). Chaining is more robust than two weak main()s, where the linker
+ * would silently pick whichever came first on the command line. */
+extern void fdir_selfcheck(void) __attribute__((weak));
+
 int main(void) {
     printf("=== Session 9: OBDH core self checks ===\n");
     check_router();
@@ -369,5 +378,10 @@ int main(void) {
     check_event_priority_and_stamps();
     check_robustness();
     printf("all Session 9 OBDH self checks passed\n");
+
+    if (fdir_selfcheck != NULL) {
+        printf("\n");
+        fdir_selfcheck();
+    }
     return 0;
 }

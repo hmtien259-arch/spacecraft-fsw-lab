@@ -13,7 +13,8 @@
  *
  * Routing (type 1 = TC, type 0 = TM):
  *   any APID, TC          -> DEST_DISPATCH
- *   APID_HK / APID_OBDH_HK-> in contact ? DOWNLINK : STORE   (HK store)
+ *   APID_HK / APID_OBDH_HK / APID_FDIR_HK
+ *                         -> in contact ? DOWNLINK : STORE   (HK store)
  *   APID_EVENT            -> in contact ? DOWNLINK : STORE   (event store)
  *   CCSDS_APID_CMD TM     -> DOWNLINK  (command responses: the ground just
  *                            spoke to us, so it is in contact by definition)
@@ -41,6 +42,7 @@
 #define APID_HK       CCSDS_APID_HK /* 0x064 = 100 */
 #define APID_EVENT    0x066u        /* 102 */
 #define APID_OBDH_HK  0x067u        /* 103: the OBDH's own housekeeping (store levels, drops) */
+#define APID_FDIR_HK  0x068u        /* 104: FDIR housekeeping (state, attempts), Session 10 */
 
 typedef enum { DEST_DOWNLINK, DEST_STORE, DEST_DISPATCH, DEST_DROP } obdh_dest;
 

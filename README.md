@@ -14,7 +14,7 @@ spacecraft-fsw-lab/
 |   |-- 02-rtos/          # Sessions 5-6: FreeRTOS HK pipeline, IPC, shared resource protection
 |   |-- 03-tmtc/          # Sessions 7-8: CCSDS/PUS TM packets, TC parsing, verification
 |   |-- 04-obdh/          # Session 9: APID router, packet store, store-and-forward
-|   `-- 05-fdir/          # FDIR module (upcoming)
+|   `-- 05-fdir/          # Session 10: health monitors, watchdog, graduated FDIR
 |-- capstone/             # capstone flight software stack
 `-- tools/scripts/        # helper scripts (dependency fetch, build helpers)
 ```
@@ -35,3 +35,6 @@ own README for its exact build command. The RTOS labs (`labs/02-rtos/`) addition
 on the FreeRTOS kernel, fetched on demand by `tools/scripts/fetch_freertos.sh` (not vendored
 into this repo — see that lab's README).
 
+## Status
+
+Sessions 2 through 10 of the Foundation and Core phases (Core phase complete).
