@@ -33,8 +33,22 @@ static int handle_connection_test(uplink_ctx *ctx, const uint8_t *app, size_t ap
     return tm_out_add(out, n) ? VFAIL_NONE : VFAIL_EXEC_ERROR;
 }
 
+/* TC[130,1] exit safe mode (Session 10): the ground's way out of FDIR's SAFE
+ * state. The decision lives in FDIR, reached through a hook so the command
+ * layer has no dependency on labs/05-fdir. A refusal is reported as a
+ * completion failure (TM[1,8], VFAIL_EXEC_ERROR), never silently ignored. */
+static int handle_exit_safe(uplink_ctx *ctx, const uint8_t *app, size_t app_len,
+                            tm_out *out) {
+    (void) app;
+    (void) app_len;
+    (void) out;
+    if (ctx->exit_safe_hook == NULL) { return VFAIL_EXEC_ERROR; }
+    return ctx->exit_safe_hook(ctx->hook_user) ? VFAIL_NONE : VFAIL_EXEC_ERROR;
+}
+
 static const cmd_entry cmd_table[] = {
-    { PUS_SERVICE_TEST, PUS_TEST_CONNECTION_TEST, 0u, handle_connection_test },
+    { PUS_SERVICE_TEST,       PUS_TEST_CONNECTION_TEST, 0u, handle_connection_test },
+    { CMD_SERVICE_FDIR_CTRL,  CMD_EXIT_SAFE_MODE,       0u, handle_exit_safe },
 };
 
 static const cmd_entry *cmd_find(uint8_t service, uint8_t subtype) {
@@ -88,6 +102,8 @@ void uplink_init(uplink_ctx *ctx) {
     ctx->tm_seq = 0;
     ctx->accepted = ctx->rejected = ctx->dropped = 0;
     ctx->executed = ctx->conn_tests = 0;
+    ctx->exit_safe_hook = NULL;
+    ctx->hook_user = NULL;
 }
 
 int uplink_handle_tc(uplink_ctx *ctx, const uint8_t *buf, size_t len, tm_out *out) {
