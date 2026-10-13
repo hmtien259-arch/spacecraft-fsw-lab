@@ -8,8 +8,8 @@
  * the vehicle into SAFE mode.
  *
  * apply_limits() and sample_state() are kept separate, free functions (not
- * static) so that we can unit test them directly by compiling this
- * file with -DHK_UNIT_TEST, which suppresses main().
+ * static) so that Session 4 can unit test them directly by compiling this
+ * file with -DHK_UNIT_TEST, which suppresses main() (see test_hk.c).
  */
 #ifndef HK_UNIT_TEST
 #define _POSIX_C_SOURCE 200809L /* nanosleep, under -std=c11 strict mode */
@@ -19,27 +19,15 @@
 #include <stdio.h>
 #include <stdint.h>
 
-typedef enum { MODE_BOOT, MODE_NOMINAL, MODE_SAFE } sc_mode_t;
-
-typedef struct {
-    float    bus_voltage;  /* volts */
-    uint8_t  battery_pct;  /* percent */
-    float    temp_obc;     /* celsius */
-    float    temp_batt;    /* celsius */
-    sc_mode_t mode;
-} spacecraft_state;
-
-#define HK_NUM_CYCLES      10
-#define HK_CYCLE_MS        200            /* fixed cycle interval, 5 Hz */
-#define BUS_VOLTAGE_MIN    6.0f           /* volts; below this -> SAFE mode */
+#include "hk_state.h" /* spacecraft_state, thresholds, prototypes: shared with labs/05-fdir */
 
 static uint64_t g_sim_tick_ms = 0;        /* simulated monotonic timestamp */
 
 /* Fills the state with plausible simulated telemetry. Values are a fixed,
  * deterministic profile (not random) on purpose: flight software tests must
- * be repeatable, and a deterministic profile lets unit tests assert exact
- * behavior instead of chasing a moving target. One cycle (index * 4) is
- * intentionally below the SAFE threshold to exercise apply_limits(). */
+ * be repeatable, and a deterministic profile lets Session 4's unit tests
+ * assert exact behavior instead of chasing a moving target. One cycle (index
+ * 4) is intentionally below the SAFE threshold to exercise apply_limits(). */
 void sample_state(spacecraft_state *s) {
     static const float bus_profile[HK_NUM_CYCLES] = {
         8.10f, 8.05f, 8.00f, 7.95f, 5.80f, 5.70f, 7.90f, 7.95f, 8.00f, 8.05f
@@ -56,8 +44,8 @@ void sample_state(spacecraft_state *s) {
 }
 
 /* HK-REQ-003: sets mode to SAFE when bus voltage falls below the defined
- * threshold. Once in SAFE, stays in SAFE (recovery is FDIR's job,
- * otherwise settles to NOMINAL once past BOOT. */
+ * threshold. Once in SAFE, stays in SAFE (recovery is FDIR's job, Session
+ * 9+), otherwise settles to NOMINAL once past BOOT. */
 void apply_limits(spacecraft_state *s) {
     if (s->bus_voltage < BUS_VOLTAGE_MIN) {
         s->mode = MODE_SAFE;
