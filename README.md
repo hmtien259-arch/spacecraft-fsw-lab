@@ -14,7 +14,8 @@ spacecraft-fsw-lab/
 |   |-- 02-rtos/          # Sessions 5-6: FreeRTOS HK pipeline, IPC, shared resource protection
 |   |-- 03-tmtc/          # Sessions 7-8: CCSDS/PUS TM packets, TC parsing, verification
 |   |-- 04-obdh/          # Session 9: APID router, packet store, store-and-forward
-|   `-- 05-fdir/          # Session 10: health monitors, watchdog, graduated FDIR
+|   |-- 05-fdir/          # Session 10: health monitors, watchdog, graduated FDIR
+|   `-- 06-mbd/           # Session 11: FDIR as a model, generated C, back-to-back tests
 |-- capstone/             # capstone flight software stack
 `-- tools/scripts/        # helper scripts (dependency fetch, build helpers)
 ```
