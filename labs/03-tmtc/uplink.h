@@ -47,6 +47,11 @@ typedef struct {
     size_t  count;
 } tm_out;
 
+/* Mission-specific (user-defined range) service for FDIR control, Session 10.
+ * Not an ECSS-E-ST-70-41 service: numbers 128-255 are left to the mission. */
+#define CMD_SERVICE_FDIR_CTRL   130u
+#define CMD_EXIT_SAFE_MODE      1u   /* TC[130,1], no application data */
+
 /* Onboard command-handler state. Counters exist so a self check can prove
  * "rejected, and NOT executed" rather than assume it. */
 typedef struct {
@@ -56,6 +61,12 @@ typedef struct {
     uint32_t dropped;       /* too short to even identify: no report possible */
     uint32_t executed;      /* handler invocations - stays 0 for bad input    */
     uint32_t conn_tests;    /* TC[17,1] executions                            */
+    /* Hook for TC[130,1] "exit safe mode". Called when the command executes;
+     * returns non-zero if the exit happened, 0 if it was refused (for example
+     * the vehicle is not in safe mode). NULL = not wired, command fails with
+     * VFAIL_EXEC_ERROR. Set by labs/05-fdir (fdir_attach_uplink). */
+    int            (*exit_safe_hook)(void *user);
+    void            *hook_user;
 } uplink_ctx;
 
 /* Pure lookup + argument check on the (service, subtype) pair. No side

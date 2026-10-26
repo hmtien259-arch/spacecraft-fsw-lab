@@ -2,6 +2,9 @@ build/
 *.o
 *.elf
 *.bin
+*.out
 .env
 FreeRTOS/
+/tmtc
 /obdh
+/fdir
