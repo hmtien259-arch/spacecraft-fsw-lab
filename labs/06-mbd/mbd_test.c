@@ -182,8 +182,15 @@ static void pair_clone(pair_t *dst, const pair_t *src) {
  * Comparison
  * ========================================================================================== */
 
-/* The model's state, seen as the reference's state. */
-static uint8_t as_ref_state(uint8_t gen_state) { return gen_state; }
+/* The model's state, seen as the reference's state. A model may refine a reference state into
+ * several (Step 4 splits NOMINAL into NOMINAL and MONITORING); back-to-back then compares under
+ * this projection. */
+static uint8_t as_ref_state(uint8_t gen_state) {
+#ifdef FDIR_GEN_HAS_STATE_MONITORING
+    if (gen_state == FDIR_GEN_STATE_MONITORING) { return (uint8_t) FDIR_GEN_STATE_NOMINAL; }
+#endif
+    return gen_state;
+}
 
 static uint32_t g_hits[256];
 static unsigned long g_compared_steps;
@@ -374,7 +381,7 @@ static uint8_t pick_small_or_any(void) {
 static void load_context(pair_t *p, unsigned st, unsigned attempts, unsigned streak, unsigned prev,
                          unsigned smask, unsigned tmask, unsigned confirm, unsigned n) {
     pair_init(p, confirm);
-    p->r.f.state = (fdir_state_t) st;
+    p->r.f.state = (fdir_state_t) as_ref_state((uint8_t) st);
     p->g.state = (fdir_gen_state_t) st;
     p->r.f.attempts = p->g.attempts = (uint8_t) attempts;
     p->r.f.fault_streak = p->g.fault_streak = (uint8_t) streak;
@@ -389,7 +396,12 @@ static void load_context(pair_t *p, unsigned st, unsigned attempts, unsigned str
 
 static unsigned random_state_code(void) {
     unsigned v = rnd() % 10u;
-    return (v < 3u) ? v : (v < 9u ? (v % 3u) : INVALID_STATE);
+    if (v == 9u) { return INVALID_STATE; }
+#ifdef FDIR_GEN_HAS_STATE_MONITORING
+    return (v < 4u) ? v : (v % 4u);
+#else
+    return (v < 3u) ? v : (v % 3u);
+#endif
 }
 
 static void check_random_contexts(void) {
@@ -400,6 +412,12 @@ static void check_random_contexts(void) {
         g_rc.attempts = pick_small_or_any();
         g_rc.streak = pick_small_or_any();
         g_rc.prev = rnd() % 3u;
+#ifdef FDIR_GEN_HAS_STATE_MONITORING
+        /* MONITORING is only entered on a rise from OK and left on OK, so it implies a previous
+         * severity above OK; a context that breaks that is unreachable, and the refinement
+         * argument (docs/09-mbd.md) does not cover it. */
+        if (g_rc.st == FDIR_GEN_STATE_MONITORING && g_rc.prev == HEALTH_OK) { g_rc.prev = HEALTH_WARN; }
+#endif
         g_rc.smask = (rnd() & 1u) ? 0u : (rnd() & 0xFFu);
         g_rc.tmask = (rnd() & 1u) ? 0u : (rnd() & 0xFFu);
         g_rc.confirm = pick_small_or_any();
@@ -477,6 +495,11 @@ static void expect_event(const gen_t *t, unsigned i, uint16_t id, fdir_sev_t sev
     assert(e->state == state && e->attempts == attempts && e->worst == worst);
 }
 
+/* NOMINAL, or the model's monitoring refinement of it: no recovery in progress. */
+static int is_quiet(fdir_gen_state_t s) {
+    return as_ref_state((uint8_t) s) == (uint8_t) FDIR_GEN_STATE_NOMINAL;
+}
+
 #define FAULT_PWR  HEALTH_FAULT, FDIR_SRC_POWER, 0u
 #define OKAY       HEALTH_OK, 0u, 0u
 #define WARNING    HEALTH_WARN, FDIR_SRC_POWER, 0u
@@ -506,7 +529,7 @@ static void req_001_persistence(void) {
     assert(t.out.n_effects == 0u && t.g.n_filtered == 2u);
     /* ...and a WARN in between interrupts it too. */
     (void) gen_cycle(&t, WARNING);
-    assert(gen_cycle(&t, FAULT_PWR) == FDIR_GEN_STATE_NOMINAL && t.g.n_filtered == 3u);
+    assert(is_quiet(gen_cycle(&t, FAULT_PWR)) && t.g.n_filtered == 3u);
     /* Two in a row: acted on at the second. */
     assert(gen_cycle(&t, FAULT_PWR) == FDIR_GEN_STATE_RECOVERING);
     assert(t.g.n_faults == 1u && t.g.n_filtered == 3u);
@@ -640,9 +663,10 @@ static void req_008_warning_edge(void) {
     gen_t t;
     gen_start(&t, 2u);
     (void) gen_cycle(&t, OKAY);
-    assert(gen_cycle(&t, WARNING) == FDIR_GEN_STATE_NOMINAL || t.g.state != FDIR_GEN_STATE_RECOVERING);
+    fdir_gen_state_t after_rise = gen_cycle(&t, WARNING);
+    assert(is_quiet(after_rise));                             /* a warning is never recovery */
     assert(t.out.n_effects == 1u);
-    expect_event(&t, 0, EVT_WARN, SEV_LOW, (uint8_t) t.g.state, 0u, HEALTH_WARN);
+    expect_event(&t, 0, EVT_WARN, SEV_LOW, (uint8_t) after_rise, 0u, HEALTH_WARN);
     (void) gen_cycle(&t, WARNING);                            /* staying in WARN: silent */
     assert(t.out.n_effects == 0u);
     (void) gen_cycle(&t, WARNING);
@@ -663,6 +687,38 @@ static void req_008_warning_edge(void) {
     }
 }
 
+#ifdef FDIR_GEN_HAS_STATE_MONITORING
+static void req_009_monitoring(void) {
+    gen_t t;
+    gen_start(&t, 2u);
+    (void) gen_cycle(&t, OKAY);
+    assert(gen_cycle(&t, WARNING) == FDIR_GEN_STATE_MONITORING);      /* the rise enters it */
+    expect_event(&t, 0, EVT_WARN, SEV_LOW, FDIR_GEN_STATE_MONITORING, 0u, HEALTH_WARN);
+    for (unsigned i = 0; i < 20u; ++i) {                              /* a WARN that stays */
+        assert(gen_cycle(&t, WARNING) == FDIR_GEN_STATE_MONITORING);  /* no timeout, no escalation */
+        assert(t.out.n_effects == 0u && t.g.attempts == 0u);
+    }
+    assert(gen_cycle(&t, OKAY) == FDIR_GEN_STATE_NOMINAL);            /* clears silently */
+    assert(t.out.n_effects == 0u);
+    /* A confirmed fault in MONITORING acts exactly as in NOMINAL; a filtered one stays. */
+    (void) gen_cycle(&t, WARNING);
+    assert(gen_cycle(&t, FAULT_PWR) == FDIR_GEN_STATE_MONITORING && t.g.n_filtered == 1u);
+    assert(t.out.n_effects == 0u);
+    assert(gen_cycle(&t, FAULT_PWR) == FDIR_GEN_STATE_RECOVERING);
+    expect_event(&t, 0, EVT_FAULT, SEV_MEDIUM, FDIR_GEN_STATE_RECOVERING, 0u, HEALTH_FAULT);
+    /* A WARN between two FAULTs interrupts the run, so no fault is confirmed. */
+    gen_start(&t, 2u);
+    (void) gen_cycle(&t, WARNING);
+    (void) gen_cycle(&t, FAULT_PWR);
+    (void) gen_cycle(&t, WARNING);
+    assert(gen_cycle(&t, FAULT_PWR) == FDIR_GEN_STATE_MONITORING);
+    /* The ground exit command does nothing in MONITORING. */
+    const fdir_gen_ctx before = t.g;
+    gen_exit(&t);
+    assert(t.last_exit == 0 && memcmp(&before, &t.g, sizeof(before)) == 0);
+}
+#endif
+
 static void check_requirements(void) {
     req_001_persistence();
     req_002_detection();
@@ -672,7 +728,12 @@ static void check_requirements(void) {
     req_006_safe_absorbing();
     req_007_ground_exit();
     req_008_warning_edge();
+#ifdef FDIR_GEN_HAS_STATE_MONITORING
+    req_009_monitoring();
+    printf("PASS A requirement tests: FDIR-REQ-001 .. FDIR-REQ-009 on the generated component alone\n\n");
+#else
     printf("PASS A requirement tests: FDIR-REQ-001 .. FDIR-REQ-008 on the generated component alone\n\n");
+#endif
 }
 
 void mbd_selfcheck(void) {
