@@ -2,7 +2,7 @@
  *
  * Interface of the FDIR step component generated from the model.
  * Source model : labs/06-mbd/fdir_model.txt
- * Model SHA-256: a8be9fc24fab90b5dccf8efb98047b7feed504b886873cc803948803ff86189b
+ * Model SHA-256: abb44330e856749a06d9da0eb0c92d7ab64059d45752ef789dfe7f968af11639
  * Generator    : labs/06-mbd/generate.py
  * Regenerate   : python3 labs/06-mbd/generate.py --write
  *
@@ -19,15 +19,17 @@
 typedef enum {
     FDIR_GEN_STATE_NOMINAL = 0,
     FDIR_GEN_STATE_RECOVERING = 1,
-    FDIR_GEN_STATE_SAFE = 2
+    FDIR_GEN_STATE_SAFE = 2,
+    FDIR_GEN_STATE_MONITORING = 3
 } fdir_gen_state_t;
 
-#define FDIR_GEN_N_STATES 3u
+#define FDIR_GEN_N_STATES 4u
 #define FDIR_GEN_HAS_STATE_NOMINAL 1
 #define FDIR_GEN_HAS_STATE_RECOVERING 1
 #define FDIR_GEN_HAS_STATE_SAFE 1
+#define FDIR_GEN_HAS_STATE_MONITORING 1
 
-#define FDIR_GEN_N_TRANSITIONS 9u
+#define FDIR_GEN_N_TRANSITIONS 13u
 #define FDIR_GEN_MAX_EFFECTS 2u
 
 /* One cycle's inputs (INPUT lines of the model). */

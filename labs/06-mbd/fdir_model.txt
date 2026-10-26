@@ -32,6 +32,7 @@
 STATE NOMINAL    = 0
 STATE RECOVERING = 1
 STATE SAFE       = 2
+STATE MONITORING = 3
 
 # ---- context -------------------------------------------------------------------------------
 VAR attempts        u8  0u
@@ -87,8 +88,14 @@ ALWAYS record_worst
 # NOMINAL: nothing wrong, or a fault not yet confirmed
 T1, NOMINAL,    FAULT_CONFIRMED, RECOVERING, streak_clear; count_fault; attempts_clear; set_causes; emit_fault,           FDIR-REQ-001 FDIR-REQ-002
 T2, NOMINAL,    FAULT,           NOMINAL,    streak_inc; count_filtered,                                                  FDIR-REQ-001
-T3, NOMINAL,    WARN_RISE,       NOMINAL,    streak_clear; emit_warn,                                                     FDIR-REQ-008
+T3, NOMINAL,    WARN_RISE,       MONITORING, streak_clear; emit_warn,                                                     FDIR-REQ-008 FDIR-REQ-009
 T4, NOMINAL,    ANY,             NOMINAL,    streak_clear,                                                                FDIR-REQ-001
+
+# MONITORING: a warning is active; watched, but no recovery action is taken
+T10, MONITORING, FAULT_CONFIRMED, RECOVERING, streak_clear; count_fault; attempts_clear; set_causes; emit_fault,          FDIR-REQ-001 FDIR-REQ-002 FDIR-REQ-009
+T11, MONITORING, FAULT,           MONITORING, streak_inc; count_filtered,                                                  FDIR-REQ-001 FDIR-REQ-009
+T12, MONITORING, OK,              NOMINAL,    streak_clear,                                                                FDIR-REQ-009
+T13, MONITORING, ANY,             MONITORING, streak_clear,                                                                FDIR-REQ-009
 
 # RECOVERING: local recovery in progress (the causes are merged on every cycle)
 T5, RECOVERING, OK,              NOMINAL,    add_causes; emit_recovered; clear_causes,                                    FDIR-REQ-004

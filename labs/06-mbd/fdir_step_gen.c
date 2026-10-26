@@ -2,7 +2,7 @@
  *
  * Step functions of the FDIR state machine generated from the model.
  * Source model : labs/06-mbd/fdir_model.txt
- * Model SHA-256: a8be9fc24fab90b5dccf8efb98047b7feed504b886873cc803948803ff86189b
+ * Model SHA-256: abb44330e856749a06d9da0eb0c92d7ab64059d45752ef789dfe7f968af11639
  * Generator    : labs/06-mbd/generate.py
  * Regenerate   : python3 labs/06-mbd/generate.py --write
  *
@@ -63,14 +63,18 @@ static void fdir_gen_req_enter_safe(const fdir_gen_ctx *c, fdir_gen_out *out, ui
 }
 
 static const unsigned char fdir_gen_ids[FDIR_GEN_N_TRANSITIONS] = {
-    1u, 2u, 3u, 4u, 5u, 6u, 7u, 8u, 9u
+    1u, 2u, 3u, 4u, 10u, 11u, 12u, 13u, 5u, 6u, 7u, 8u, 9u
 };
 
 static const char *const fdir_gen_texts[FDIR_GEN_N_TRANSITIONS] = {
     "T1 NOMINAL --FAULT_CONFIRMED--> RECOVERING",
     "T2 NOMINAL --FAULT--> NOMINAL",
-    "T3 NOMINAL --WARN_RISE--> NOMINAL",
+    "T3 NOMINAL --WARN_RISE--> MONITORING",
     "T4 NOMINAL --ANY--> NOMINAL",
+    "T10 MONITORING --FAULT_CONFIRMED--> RECOVERING",
+    "T11 MONITORING --FAULT--> MONITORING",
+    "T12 MONITORING --OK--> NOMINAL",
+    "T13 MONITORING --ANY--> MONITORING",
     "T5 RECOVERING --OK--> NOMINAL",
     "T6 RECOVERING --ATTEMPTS_MAX--> SAFE",
     "T7 RECOVERING --ANY--> RECOVERING",
@@ -92,6 +96,7 @@ const char *fdir_gen_state_name(fdir_gen_state_t s) {
     case FDIR_GEN_STATE_NOMINAL: name = "NOMINAL"; break;
     case FDIR_GEN_STATE_RECOVERING: name = "RECOVERING"; break;
     case FDIR_GEN_STATE_SAFE: name = "SAFE"; break;
+    case FDIR_GEN_STATE_MONITORING: name = "MONITORING"; break;
     default: break;
     }
     return name;
@@ -145,9 +150,9 @@ fdir_gen_state_t fdir_step_gen(fdir_gen_ctx *c, const fdir_gen_in *in, fdir_gen_
             c->fault_streak = (uint8_t)streak_next;
             c->n_filtered++;
         } else if (worst == HEALTH_WARN && c->prev_worst == HEALTH_OK) {
-            /* T3 NOMINAL --WARN_RISE--> NOMINAL */
+            /* T3 NOMINAL --WARN_RISE--> MONITORING */
             out->transition = 3u;
-            c->state = FDIR_GEN_STATE_NOMINAL;
+            c->state = FDIR_GEN_STATE_MONITORING;
             c->fault_streak = 0u;
             fdir_gen_emit(c, out, EVT_WARN, SEV_LOW, worst);
         } else {
@@ -192,6 +197,35 @@ fdir_gen_state_t fdir_step_gen(fdir_gen_ctx *c, const fdir_gen_in *in, fdir_gen_
             /* T8 SAFE --ANY--> SAFE */
             out->transition = 8u;
             c->state = FDIR_GEN_STATE_SAFE;
+        }
+        break;
+    case FDIR_GEN_STATE_MONITORING:
+        if (worst == HEALTH_FAULT && streak_next >= need) {
+            /* T10 MONITORING --FAULT_CONFIRMED--> RECOVERING */
+            out->transition = 10u;
+            c->state = FDIR_GEN_STATE_RECOVERING;
+            c->fault_streak = 0u;
+            c->n_faults++;
+            c->attempts = 0u;
+            c->source_mask = sources;
+            c->task_mask = stalled;
+            fdir_gen_emit(c, out, EVT_FAULT, SEV_MEDIUM, worst);
+        } else if (worst == HEALTH_FAULT) {
+            /* T11 MONITORING --FAULT--> MONITORING */
+            out->transition = 11u;
+            c->state = FDIR_GEN_STATE_MONITORING;
+            c->fault_streak = (uint8_t)streak_next;
+            c->n_filtered++;
+        } else if (worst == HEALTH_OK) {
+            /* T12 MONITORING --OK--> NOMINAL */
+            out->transition = 12u;
+            c->state = FDIR_GEN_STATE_NOMINAL;
+            c->fault_streak = 0u;
+        } else {
+            /* T13 MONITORING --ANY--> MONITORING */
+            out->transition = 13u;
+            c->state = FDIR_GEN_STATE_MONITORING;
+            c->fault_streak = 0u;
         }
         break;
     default:
