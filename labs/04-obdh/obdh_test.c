@@ -368,6 +368,7 @@ static void check_robustness(void) {
  * otherwise). Chaining is more robust than two weak main()s, where the linker
  * would silently pick whichever came first on the command line. */
 extern void fdir_selfcheck(void) __attribute__((weak));
+extern void mbd_selfcheck(void) __attribute__((weak));
 
 int main(void) {
     printf("=== Session 9: OBDH core self checks ===\n");
@@ -382,6 +383,10 @@ int main(void) {
     if (fdir_selfcheck != NULL) {
         printf("\n");
         fdir_selfcheck();
+    }
+    if (mbd_selfcheck != NULL) {
+        printf("\n");
+        mbd_selfcheck();
     }
     return 0;
 }
