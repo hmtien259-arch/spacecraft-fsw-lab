@@ -48,7 +48,7 @@ void sample_state(spacecraft_state *s) {
  * threshold. Once in SAFE, stays in SAFE (recovery is FDIR's job, Session
  * 9+), otherwise settles to NOMINAL once past BOOT. */
 void apply_limits(spacecraft_state *s) {
-    if (s->bus_voltage < BUS_VOLTAGE_MIN) {
+    if (s->bus_voltage > BUS_VOLTAGE_MIN) {
         s->mode = MODE_SAFE;
     } else if (s->mode != MODE_SAFE) {
         s->mode = MODE_NOMINAL;
