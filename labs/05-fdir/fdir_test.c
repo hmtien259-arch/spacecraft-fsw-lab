@@ -21,6 +21,9 @@
  */
 #include "fdir.h"
 
+#ifdef NDEBUG
+#error "the self checks are written with assert(): building them with NDEBUG would make every check pass vacuously"
+#endif
 #include <assert.h>
 #include <stdio.h>
 #include <string.h>
@@ -133,7 +136,8 @@ static unsigned hn_run_to_safe(hn *h) {
     unsigned n = 0;
     while (h->f.state != FDIR_SAFE) {
         (void) hn_cycle(h, 5.0f);
-        assert(++n < 32u);
+        ++n;
+        assert(n < 32u);
     }
     return n;
 }
@@ -416,7 +420,7 @@ static void check_watchdog_integration(void) {
     (void) hn_cycle(&h, 8.0f);
     h.silent_task = TASK_TELEMETRY;
     unsigned n = 0;
-    while (h.f.state != FDIR_SAFE) { (void) hn_cycle_state(&h); assert(++n < 32u); }
+    while (h.f.state != FDIR_SAFE) { (void) hn_cycle_state(&h); ++n; assert(n < 32u); }
     assert(n == 1u + FDIR_MAX_ATTEMPTS + 1u && h.s.mode == MODE_SAFE);
     assert(h.safe_sources == FDIR_SRC_WATCHDOG);
     assert(EV_TASKS(h.log.pkt[h.log.n - 1]) == (1u << TASK_TELEMETRY));   /* SAFE_ENTER names the task too */
@@ -581,7 +585,7 @@ static void check_fdir_hk(void) {
     size_t mark = h.log.n;
     assert(obdh_ingest(&h.o, rep, n) == DEST_DOWNLINK && h.log.n == mark + 1);
     assert(apid_of(h.log.pkt[mark]) == APID_FDIR_HK);
-    n = fdir_build_hk(&h.f, rep, sizeof(rep));
+    assert(fdir_build_hk(&h.f, rep, sizeof(rep)) != 0);
     assert(seq_of(rep) == 1);                                     /* its own sequence count */
     assert(fdir_build_hk(&h.f, rep, 8) == 0 && h.f.hk_seq == 2);  /* too small: nothing built, count kept */
 
@@ -660,6 +664,49 @@ static void scenario_persistent_fault(void) {
     printf("PASS persistent fault: confirmed, 3 local recoveries, then SAFE with a HIGH-severity event\n\n");
 }
 
+/* Paths the coverage report (tools/coverage.sh) showed no test reached: FDIR without hooks,
+ * the event name and subtype tables, and the invalid-input defaults. */
+static void check_defensive_paths(void) {
+    /* No hooks: recovery and safe entry have nothing to call, but the state machine must still
+     * run to SAFE and report every step. */
+    obdh_ctx o; dl_log log;
+    memset(&log, 0, sizeof(log));
+    obdh_init(&o, record, &log, 1);
+    fdir_ctx f;
+    fdir_init(&f, &o, NULL);
+    f.confirm_cycles = 1u;
+    unsigned guard = 0;
+    while (f.state != FDIR_SAFE) {
+        (void) fdir_step(&f, HEALTH_FAULT, FDIR_SRC_POWER);
+        ++guard;
+        assert(guard < 16u);
+    }
+    assert(f.attempts == FDIR_MAX_ATTEMPTS && f.n_safe_entries == 1u && f.n_event_lost == 0u);
+    assert(fdir_exit_safe(&f) == 1 && f.state == FDIR_NOMINAL);
+
+    /* Event names and subtypes: every id and severity, and the fallbacks. */
+    assert(strcmp(fdir_event_name(EVT_WARN), "WARN") == 0);
+    assert(strcmp(fdir_event_name(EVT_FAULT), "FAULT") == 0);
+    assert(strcmp(fdir_event_name(EVT_RECOVERY_ACTION), "RECOVERY_ACTION") == 0);
+    assert(strcmp(fdir_event_name(EVT_RECOVERED), "RECOVERED") == 0);
+    assert(strcmp(fdir_event_name(EVT_SAFE_ENTER), "SAFE_ENTER") == 0);
+    assert(strcmp(fdir_event_name(EVT_SAFE_EXIT), "SAFE_EXIT") == 0);
+    assert(strcmp(fdir_event_name(0xFFFFu), "?") == 0);
+    assert(fdir_event_subtype(SEV_INFO) == 1u && fdir_event_subtype(SEV_LOW) == 2u);
+    assert(fdir_event_subtype(SEV_MEDIUM) == 3u && fdir_event_subtype(SEV_HIGH) == 4u);
+    /* NOLINTNEXTLINE(clang-analyzer-optin.core.EnumCastOutOfRange): invalid value on purpose */
+    assert(fdir_event_subtype((fdir_sev_t) 99) == 1u);
+
+    /* A corrupted state value is not acted on and not changed by one cycle. */
+    /* NOLINTBEGIN(clang-analyzer-optin.core.EnumCastOutOfRange): invalid value on purpose */
+    f.state = (fdir_state_t) 77;
+    uint32_t events_before = f.n_events;
+    assert(fdir_step(&f, HEALTH_FAULT, FDIR_SRC_POWER) == (fdir_state_t) 77);
+    /* NOLINTEND(clang-analyzer-optin.core.EnumCastOutOfRange) */
+    assert(f.n_events == events_before && fdir_exit_safe(&f) == 0);
+    printf("PASS defensive paths: no hooks, event names and subtypes, corrupted state value\n\n");
+}
+
 void fdir_selfcheck(void) {
     printf("=== Session 10: FDIR self checks ===\n");
     scenario_session3_profile();   /* first: sample_state() must start at profile index 0 */
@@ -671,6 +718,7 @@ void fdir_selfcheck(void) {
     check_events_via_obdh();
     check_ground_exit();
     check_fdir_hk();
+    check_defensive_paths();
     scenario_persistent_fault();
     printf("all Session 10 FDIR self checks passed\n");
 }
