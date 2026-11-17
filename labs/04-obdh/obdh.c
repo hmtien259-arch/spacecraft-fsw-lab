@@ -9,7 +9,6 @@ obdh_dest obdh_route(uint16_t apid, uint8_t pkt_type, int in_contact) {
     case APID_HK:
     case APID_OBDH_HK:
     case APID_FDIR_HK:
-        return in_contact ? DEST_DOWNLINK : DEST_STORE;
     case APID_EVENT:
         return in_contact ? DEST_DOWNLINK : DEST_STORE;
     case CCSDS_APID_CMD:

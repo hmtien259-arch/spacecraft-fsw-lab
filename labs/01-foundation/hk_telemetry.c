@@ -12,6 +12,7 @@
  * file with -DHK_UNIT_TEST, which suppresses main() (see test_hk.c).
  */
 #ifndef HK_UNIT_TEST
+/* NOLINTNEXTLINE(bugprone-reserved-identifier,cert-dcl37-c,cert-dcl51-cpp): feature-test macro */
 #define _POSIX_C_SOURCE 200809L /* nanosleep, under -std=c11 strict mode */
 #include <time.h>               /* only needed by the standalone program's loop */
 #endif

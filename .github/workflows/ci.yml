@@ -1,0 +1,88 @@
+# Continuous integration for the spacecraft-fsw-lab flight software labs.
+#
+# Every job below is a REQUIRED status check for merging (see docs/11-ci-vv.md for the list to
+# set in the branch protection rule and for why each one blocks). The only informational output
+# is the coverage summary published on the run page and as an artifact; the coverage floors
+# themselves block.
+name: CI
+
+on:
+  push:
+  pull_request:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  # Pinned FreeRTOS kernel tag (tools/scripts/fetch_freertos.sh), so an upstream change cannot
+  # turn this pipeline red without a change in this repository.
+  FREERTOS_REF: V11.3.0
+
+jobs:
+  consistency:
+    name: Model-to-code and traceability
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - name: Generated FDIR code matches its model
+        run: python3 -I labs/06-mbd/generate.py --check
+      - name: Every requirement has an executed test, and the matrix is current
+        run: python3 -I tools/check_traceability.py
+
+  build-and-test:
+    name: Build and test (${{ matrix.cc }})
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    strategy:
+      fail-fast: false
+      matrix:
+        cc: [gcc, clang]
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build every lab with warnings as errors and run all self checks
+        run: CC=${{ matrix.cc }} bash tools/run_tests.sh
+
+  sanitizers:
+    name: AddressSanitizer and UBSan
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - name: Self checks under sanitizers (any report aborts)
+        run: SAN=1 SKIP_RTOS=1 bash tools/run_tests.sh
+
+  static-analysis:
+    name: Static analysis (clang-tidy)
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install clang-tidy
+        run: sudo apt-get update && sudo apt-get install -y --no-install-recommends clang-tidy
+      - name: Analyse labs 01 and 03-06 (any finding fails)
+        run: bash tools/static_analysis.sh
+
+  coverage:
+    name: FDIR coverage gates
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - name: Measure coverage and enforce the floors
+        run: bash tools/coverage.sh
+      - name: Show the summary on the run page
+        if: always()
+        run: |
+          if [ -f build/coverage/summary.md ]; then cat build/coverage/summary.md >> "$GITHUB_STEP_SUMMARY"; fi
+      - name: Keep the gcov reports
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: fdir-coverage
+          path: build/coverage/
+          if-no-files-found: ignore

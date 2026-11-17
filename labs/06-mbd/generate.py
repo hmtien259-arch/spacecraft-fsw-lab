@@ -387,6 +387,9 @@ def gen_header(m):
           " * command has no effect in the current state. */",
           "int fdir_exit_safe_gen(fdir_gen_ctx *c, fdir_gen_out *out);",
           "",
+          "/* Member-wise equality of two component states (memcmp would compare padding too). */",
+          "int fdir_gen_ctx_same(const fdir_gen_ctx *a, const fdir_gen_ctx *b);",
+          "",
           "/* Names and transition table, for logs and for model-coverage reports. */",
           "const char *fdir_gen_state_name(fdir_gen_state_t s);",
           "unsigned fdir_gen_transition_id(unsigned index);     /* index < FDIR_GEN_N_TRANSITIONS */",
@@ -472,12 +475,18 @@ def gen_c(m):
     L.append("    return (index < FDIR_GEN_N_TRANSITIONS) ? fdir_gen_texts[index] : \"?\";")
     L.append("}")
     L.append("")
+    L.append("int fdir_gen_ctx_same(const fdir_gen_ctx *a, const fdir_gen_ctx *b) {")
+    # bitwise & on 0/1 values: no short-circuit, so no branch per field in coverage reports
+    terms = ["(a->state == b->state)"] + ["(a->%s == b->%s)" % (n, n) for n, _t, _i in m.vars]
+    L.append("    return " + " &\n           ".join(terms) + ";")
+    L.append("}")
+    L.append("")
     L.append("const char *fdir_gen_state_name(fdir_gen_state_t s) {")
-    L.append("    const char *name = \"?\";")
+    L.append("    const char *name;")
     L.append("    switch (s) {")
     for n, _ in m.states:
         L.append('    case FDIR_GEN_STATE_%s: name = "%s"; break;' % (n, n))
-    L.append("    default: break;")
+    L.append("    default: name = \"?\"; break;")
     L.append("    }")
     L.append("    return name;")
     L.append("}")
