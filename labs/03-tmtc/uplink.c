@@ -86,7 +86,7 @@ static uint8_t failure_for_parse_error(int status) {
     case TC_ERR_CRC:         return VFAIL_BAD_CRC;
     case TC_ERR_APID:        return VFAIL_BAD_APID;
     case TC_ERR_TYPE:
-    case TC_ERR_PUS_VERSION: return VFAIL_BAD_HEADER;
+    case TC_ERR_PUS_VERSION:
     default:                 return VFAIL_BAD_HEADER;
     }
 }
