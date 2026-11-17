@@ -13,6 +13,9 @@
 #define HK_UNIT_TEST
 #include "hk_telemetry.c"
 
+#ifdef NDEBUG
+#error "the self checks are written with assert(): building them with NDEBUG would make every check pass vacuously"
+#endif
 #include <assert.h>
 #include <math.h>
 #include <stdio.h>

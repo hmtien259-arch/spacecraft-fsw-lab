@@ -27,6 +27,9 @@
 #include "fdir_step_gen.h"
 #include "../05-fdir/fdir.h"
 
+#ifdef NDEBUG
+#error "the self checks are written with assert(): building them with NDEBUG would make every check pass vacuously"
+#endif
 #include <assert.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -453,6 +456,20 @@ static void check_model_coverage(void) {
     assert(covered == FDIR_GEN_N_TRANSITIONS);
     printf("PASS C model coverage: %u of %u transitions exercised\n", covered, FDIR_GEN_N_TRANSITIONS);
     assert(fdir_gen_transition_id(FDIR_GEN_N_TRANSITIONS) == 0u);
+    assert(strcmp(fdir_gen_transition_text(FDIR_GEN_N_TRANSITIONS), "?") == 0);
+}
+
+/* The diagnostic accessors, which nothing else in the build calls. */
+static void check_state_names(void) {
+    assert(strcmp(fdir_gen_state_name(FDIR_GEN_STATE_NOMINAL), "NOMINAL") == 0);
+    assert(strcmp(fdir_gen_state_name(FDIR_GEN_STATE_RECOVERING), "RECOVERING") == 0);
+    assert(strcmp(fdir_gen_state_name(FDIR_GEN_STATE_SAFE), "SAFE") == 0);
+#ifdef FDIR_GEN_HAS_STATE_MONITORING
+    assert(strcmp(fdir_gen_state_name(FDIR_GEN_STATE_MONITORING), "MONITORING") == 0);
+#endif
+    /* NOLINTNEXTLINE(clang-analyzer-optin.core.EnumCastOutOfRange): invalid value on purpose */
+    assert(strcmp(fdir_gen_state_name((fdir_gen_state_t) INVALID_STATE), "?") == 0);
+    printf("PASS state names\n");
 }
 
 /* ============================================================================================
@@ -565,7 +582,7 @@ static void req_003_graduated_recovery(void) {
     gen_t t;
     static const uint8_t rung[3] = { RECOVERY_RETRY, RECOVERY_RESET_DEVICE, RECOVERY_SWITCH_REDUNDANT };
     gen_into_recovering(&t);
-    assert(FDIR_MAX_ATTEMPTS == 3u);
+    _Static_assert(FDIR_MAX_ATTEMPTS == 3u, "the rung table below assumes three attempts");
     for (unsigned i = 0; i < FDIR_MAX_ATTEMPTS; ++i) {
         assert(gen_cycle(&t, FAULT_PWR) == FDIR_GEN_STATE_RECOVERING);
         assert(t.out.n_effects == 2u);                       /* exactly one action and its report */
@@ -652,7 +669,7 @@ static void req_007_ground_exit(void) {
     gen_into_recovering(&t);
     const fdir_gen_ctx before = t.g;
     gen_exit(&t);
-    assert(t.last_exit == 0 && t.out.n_effects == 0u && memcmp(&before, &t.g, sizeof(before)) == 0);
+    assert(t.last_exit == 0 && t.out.n_effects == 0u && fdir_gen_ctx_same(&before, &t.g));
     /* A fault that is still there is detected again after the exit. */
     gen_into_safe(&t);
     gen_exit(&t);
@@ -715,7 +732,7 @@ static void req_009_monitoring(void) {
     /* The ground exit command does nothing in MONITORING. */
     const fdir_gen_ctx before = t.g;
     gen_exit(&t);
-    assert(t.last_exit == 0 && memcmp(&before, &t.g, sizeof(before)) == 0);
+    assert(t.last_exit == 0 && fdir_gen_ctx_same(&before, &t.g));
 }
 #endif
 
@@ -746,5 +763,6 @@ void mbd_selfcheck(void) {
     check_random_contexts();
     printf("     %lu steps compared in total\n", g_compared_steps);
     check_model_coverage();
+    check_state_names();
     printf("all Session 11 model-based FDIR self checks passed\n");
 }

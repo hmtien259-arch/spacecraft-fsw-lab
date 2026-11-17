@@ -20,6 +20,9 @@
 #include "pus.h"
 #include "uplink.h"
 
+#ifdef NDEBUG
+#error "the self checks are written with assert(): building them with NDEBUG would make every check pass vacuously"
+#endif
 #include <assert.h>
 #include <stdio.h>
 #include <string.h>
@@ -93,6 +96,20 @@ static void self_check_primary_header(const uint8_t *packet, uint16_t expected_s
     assert(parsed.data_length == expected_data_len);
 }
 
+/* Round-trip the payload too, to prove pack/unpack agree end to end, not just the primary
+ * header. */
+static void self_check_payload_roundtrip(const uint8_t *packet, const spacecraft_state *s) {
+    float rt_bus, rt_obc, rt_batt;
+    uint8_t rt_pct, rt_mode;
+    pus_deserialize_hk_payload(packet + CCSDS_PRI_HDR_LEN + PUS_TM_SEC_HDR_LEN,
+                                &rt_bus, &rt_pct, &rt_obc, &rt_batt, &rt_mode);
+    assert(rt_bus == s->bus_voltage);
+    assert(rt_pct == s->battery_pct);
+    assert(rt_obc == s->temp_obc);
+    assert(rt_batt == s->temp_batt);
+    assert(rt_mode == (uint8_t) s->mode);
+}
+
 /* Deliverable #4 self-check: sequence count increments per packet and
  * wraps at 16383 (i.e. the 14-bit counter rolls 16383 -> 0). Run
  * independently of the 10-cycle demo below, which never gets near the
@@ -131,17 +148,7 @@ __attribute__((weak)) int main(void) {
         self_check_primary_header(packet, seq_count,
                                    (uint16_t) ((PUS_TM_SEC_HDR_LEN + PUS_HK_PAYLOAD_LEN) - 1));
 
-        /* Round-trip the payload too, to prove pack/unpack agree end to end,
-         * not just the primary header. */
-        float rt_bus, rt_obc, rt_batt;
-        uint8_t rt_pct, rt_mode;
-        pus_deserialize_hk_payload(packet + CCSDS_PRI_HDR_LEN + PUS_TM_SEC_HDR_LEN,
-                                    &rt_bus, &rt_pct, &rt_obc, &rt_batt, &rt_mode);
-        assert(rt_bus == s.bus_voltage);
-        assert(rt_pct == s.battery_pct);
-        assert(rt_obc == s.temp_obc);
-        assert(rt_batt == s.temp_batt);
-        assert(rt_mode == (uint8_t) s.mode);
+        self_check_payload_roundtrip(packet, &s);
 
         seq_count = (uint16_t) ((seq_count + 1) % 16384); /* HK-REQ-004-style, for packets */
     }

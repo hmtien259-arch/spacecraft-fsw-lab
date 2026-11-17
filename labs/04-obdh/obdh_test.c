@@ -19,6 +19,9 @@
  */
 #include "obdh.h"
 
+#ifdef NDEBUG
+#error "the self checks are written with assert(): building them with NDEBUG would make every check pass vacuously"
+#endif
 #include <assert.h>
 #include <stdio.h>
 #include <string.h>
