@@ -1,0 +1,107 @@
+# labs/06-mbd/fdir_model.txt
+#
+# The FDIR decision logic as a model: the single source of truth for the state machine
+# built by hand in Session 10 (labs/05-fdir/fdir.c, fdir_step() and fdir_exit_safe()).
+# generate.py turns this file into fdir_step_gen.c / fdir_step_gen.h. Never edit those by
+# hand: change THIS file and regenerate with
+#     python3 labs/06-mbd/generate.py --write
+#
+# Language (one directive per line; '#' starts a comment):
+#   STATE  NAME = code          Wire value reported in events. The first state is the initial one.
+#                               New states take new codes: existing codes must never change.
+#   VAR    name type init       Context variable. type is u8 or u16. init is a C constant, or
+#                               PARAM (then it is an argument of fdir_init_gen()).
+#   INPUT  name type            Value sampled once per cycle and passed in by the caller.
+#   LET    name = expr          Value derived from the context BEFORE the step changes anything.
+#   COND   NAME = expr          Guard: a C expression over VARs, INPUTs and LETs.
+#   ACTION name = stmt; stmt    Change to the context, or a request to the outside world:
+#                                 EMIT(event, severity, worst)  report a PUS event
+#                                 REQ_RECOVER(action, sources)  run one local recovery action
+#                                 REQ_ENTER_SAFE(sources)       put the vehicle in safe configuration
+#   ALWAYS action; action       Run at the end of every cycle step, whichever row fired.
+#   Tn, STATE, COND, NEXT, a; b, REQ-IDs
+#                               Transition row with a stable id (Tn). Rows of one state are tried
+#                               top to bottom and the first true guard wins. COND is a COND name,
+#                               ANY (always true, must be the last row of its state) or GROUND_CMD
+#                               (the ground exit command, served by fdir_exit_safe_gen()).
+#                               NEXT is assigned BEFORE the actions run, so an event reports the
+#                               state AFTER the transition. '-' means no actions. REQ-IDs are
+#                               space separated and must exist in requirements.md.
+
+# ---- states --------------------------------------------------------------------------------
+STATE NOMINAL    = 0
+STATE RECOVERING = 1
+STATE SAFE       = 2
+STATE MONITORING = 3
+
+# ---- context -------------------------------------------------------------------------------
+VAR attempts        u8  0u
+VAR fault_streak    u8  0u
+VAR prev_worst      u8  HEALTH_OK
+VAR source_mask     u8  0u
+VAR task_mask       u8  0u
+VAR n_faults        u16 0u
+VAR n_safe_entries  u16 0u
+VAR n_filtered      u16 0u
+VAR confirm_cycles  u8  PARAM
+
+# ---- inputs, sampled once per FDIR cycle ---------------------------------------------------
+INPUT worst    u8     # worst severity of the monitors and the watchdog (HEALTH_*)
+INPUT sources  u8     # monitors responsible for that severity (FDIR_SRC_* bit mask)
+INPUT stalled  u8     # tasks the watchdog found stalled (bit i = task i)
+
+# ---- derived values ------------------------------------------------------------------------
+LET streak_next = (fault_streak < 255u) ? (unsigned)fault_streak + 1u : 255u
+LET need        = (confirm_cycles == 0u) ? 1u : (unsigned)confirm_cycles
+
+# ---- guards --------------------------------------------------------------------------------
+COND OK              = worst == HEALTH_OK
+COND FAULT           = worst == HEALTH_FAULT
+COND FAULT_CONFIRMED = worst == HEALTH_FAULT && streak_next >= need
+COND WARN_RISE       = worst == HEALTH_WARN && prev_worst == HEALTH_OK
+COND ATTEMPTS_MAX    = attempts >= FDIR_MAX_ATTEMPTS
+
+# ---- actions -------------------------------------------------------------------------------
+ACTION streak_clear          = fault_streak = 0u
+ACTION streak_inc            = fault_streak = (uint8_t)streak_next
+ACTION count_filtered        = n_filtered++
+ACTION count_fault           = n_faults++
+ACTION count_safe_entry      = n_safe_entries++
+ACTION count_attempt         = attempts++
+ACTION attempts_clear        = attempts = 0u
+ACTION set_causes            = source_mask = sources; task_mask = stalled
+ACTION add_causes            = source_mask |= sources; task_mask |= stalled
+ACTION clear_causes          = source_mask = 0u; task_mask = 0u
+ACTION record_worst          = prev_worst = worst
+ACTION emit_fault            = EMIT(EVT_FAULT, SEV_MEDIUM, worst)
+ACTION emit_warn             = EMIT(EVT_WARN, SEV_LOW, worst)
+ACTION emit_recovery_action  = EMIT(EVT_RECOVERY_ACTION, SEV_INFO, worst)
+ACTION emit_recovered        = EMIT(EVT_RECOVERED, SEV_LOW, worst)
+ACTION emit_safe_enter       = EMIT(EVT_SAFE_ENTER, SEV_HIGH, worst)
+ACTION emit_safe_exit        = EMIT(EVT_SAFE_EXIT, SEV_INFO, prev_worst)
+ACTION run_recovery          = REQ_RECOVER(attempts <= 1u ? RECOVERY_RETRY : (attempts == 2u ? RECOVERY_RESET_DEVICE : RECOVERY_SWITCH_REDUNDANT), source_mask)
+ACTION enter_safe            = REQ_ENTER_SAFE(source_mask)
+
+ALWAYS record_worst
+
+# ---- transitions ---------------------------------------------------------------------------
+# NOMINAL: nothing wrong, or a fault not yet confirmed
+T1, NOMINAL,    FAULT_CONFIRMED, RECOVERING, streak_clear; count_fault; attempts_clear; set_causes; emit_fault,           FDIR-REQ-001 FDIR-REQ-002
+T2, NOMINAL,    FAULT,           NOMINAL,    streak_inc; count_filtered,                                                  FDIR-REQ-001
+T3, NOMINAL,    WARN_RISE,       MONITORING, streak_clear; emit_warn,                                                     FDIR-REQ-008 FDIR-REQ-009
+T4, NOMINAL,    ANY,             NOMINAL,    streak_clear,                                                                FDIR-REQ-001
+
+# MONITORING: a warning is active; watched, but no recovery action is taken
+T10, MONITORING, FAULT_CONFIRMED, RECOVERING, streak_clear; count_fault; attempts_clear; set_causes; emit_fault,          FDIR-REQ-001 FDIR-REQ-002 FDIR-REQ-009
+T11, MONITORING, FAULT,           MONITORING, streak_inc; count_filtered,                                                  FDIR-REQ-001 FDIR-REQ-009
+T12, MONITORING, OK,              NOMINAL,    streak_clear,                                                                FDIR-REQ-009
+T13, MONITORING, ANY,             MONITORING, streak_clear,                                                                FDIR-REQ-009
+
+# RECOVERING: local recovery in progress (the causes are merged on every cycle)
+T5, RECOVERING, OK,              NOMINAL,    add_causes; emit_recovered; clear_causes,                                    FDIR-REQ-004
+T6, RECOVERING, ATTEMPTS_MAX,    SAFE,       add_causes; count_safe_entry; emit_safe_enter; enter_safe,                   FDIR-REQ-005
+T7, RECOVERING, ANY,             RECOVERING, add_causes; count_attempt; run_recovery; emit_recovery_action,               FDIR-REQ-003
+
+# SAFE: absorbing until the ground says otherwise
+T8, SAFE,       ANY,             SAFE,       -,                                                                           FDIR-REQ-006
+T9, SAFE,       GROUND_CMD,      NOMINAL,    attempts_clear; streak_clear; emit_safe_exit; clear_causes,                  FDIR-REQ-007
