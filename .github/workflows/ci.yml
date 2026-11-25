@@ -1,9 +1,13 @@
 # Continuous integration for the spacecraft-fsw-lab flight software labs.
 #
 # Every job below is a REQUIRED status check for merging (see docs/11-ci-vv.md for the list to
-# set in the branch protection rule and for why each one blocks). The only informational output
-# is the coverage summary published on the run page and as an artifact; the coverage floors
-# themselves block.
+# set in the branch protection rule and for why each one blocks), except "Capstone acceptance
+# readiness", which is informational until the capstone is complete (docs/12-capstone-baseline.md).
+# The coverage summaries are informational; the coverage floors themselves block.
+#
+# Capstone gates (Session 13): the build-and-test and sanitizer jobs already build capstone/ on gcc
+# and clang through tools/run_tests.sh; the jobs below add its traceability, report, coverage and
+# cppcheck gates.
 name: CI
 
 on:
@@ -33,6 +37,10 @@ jobs:
         run: python3 -I labs/06-mbd/generate.py --check
       - name: Every requirement has an executed test, and the matrix is current
         run: python3 -I tools/check_traceability.py
+      - name: Capstone requirements, scenarios and traceability agree (Session 13)
+        run: python3 -I tools/check_capstone_traceability.py
+      - name: Capstone report is present and complete
+        run: bash tools/capstone_gates.sh report
 
   build-and-test:
     name: Build and test (${{ matrix.cc }})
@@ -86,3 +94,42 @@ jobs:
           name: fdir-coverage
           path: build/coverage/
           if-no-files-found: ignore
+
+  capstone-coverage:
+    name: Capstone coverage gates
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - name: Overall lines >= 80 %, FDIR branches >= 90 % (not armed until capstone/src has code)
+        run: bash tools/capstone_gates.sh coverage
+      - name: Show the summary on the run page
+        if: always()
+        run: |
+          if [ -f build/capstone/coverage/summary.md ]; then cat build/capstone/coverage/summary.md >> "$GITHUB_STEP_SUMMARY"; fi
+
+  capstone-static-analysis:
+    name: Capstone static analysis (cppcheck)
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install cppcheck
+        run: sudo apt-get update && sudo apt-get install -y --no-install-recommends cppcheck
+      - name: cppcheck over capstone/, nominal and FSW_TEST configurations (any finding fails)
+        run: bash tools/capstone_gates.sh cppcheck
+
+  capstone-acceptance:
+    name: Capstone acceptance readiness (informational)
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    # Not a required check: it is red until every requirement is verified and the coverage gate is
+    # armed. It becomes required when the capstone is declared complete (Session 13 section 7).
+    continue-on-error: true
+    steps:
+      - uses: actions/checkout@v4
+      - name: No requirement pending (strict traceability)
+        run: python3 -I tools/check_capstone_traceability.py --strict 2>&1 | tee -a "$GITHUB_STEP_SUMMARY"
+      - name: Coverage gate armed
+        if: always()
+        run: REQUIRE_ARMED=1 bash tools/capstone_gates.sh coverage

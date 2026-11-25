@@ -52,8 +52,8 @@ MBD=(labs/06-mbd/*.c)
 # Checks that are not compiled code (generated files and traceability must be current).
 echo "== model-to-code consistency"
 python3 -I labs/06-mbd/generate.py --check || fail "generated FDIR code does not match its model"
-echo "== requirement traceability"
-python3 -I tools/check_traceability.py || fail "requirement to test traceability"
+echo "== requirement traceability (labs and capstone)"
+bash tools/check_traceability.sh || fail "requirement to test traceability"
 
 # Each lab's build includes the earlier ones it depends on and re-runs their checks, so every
 # group below is a superset of the previous one; the markers prove which groups really ran.
@@ -64,5 +64,9 @@ run_lab 04-obdh            "all Session 9 OBDH self checks passed"   "${TMTC[@]}
 run_lab 05-fdir            "all Session 10 FDIR self checks passed"  "${TMTC[@]}" "${OBDH[@]}" "${FDIR[@]}"
 run_lab 06-mbd             "all Session 11 model-based FDIR self checks passed" \
                            "${TMTC[@]}" "${OBDH[@]}" "${FDIR[@]}" "${MBD[@]}"
+
+# Capstone (Session 13 onwards): its own conventions, see tools/capstone_gates.sh. Same CC and SAN.
+OUT_DIR="$OUT/capstone" bash tools/capstone_gates.sh test || fail "capstone build and tests"
+passed=$((passed + 1))
 
 echo "ALL TESTS PASSED ($passed groups, CC=$CC${SAN:+, sanitizers}${COVERAGE:+, coverage})"
