@@ -91,6 +91,9 @@ fdir_gen_state_t fdir_step_gen(fdir_gen_ctx *c, const fdir_gen_in *in, fdir_gen_
  * command has no effect in the current state. */
 int fdir_exit_safe_gen(fdir_gen_ctx *c, fdir_gen_out *out);
 
+/* Member-wise equality of two component states (memcmp would compare padding too). */
+int fdir_gen_ctx_same(const fdir_gen_ctx *a, const fdir_gen_ctx *b);
+
 /* Names and transition table, for logs and for model-coverage reports. */
 const char *fdir_gen_state_name(fdir_gen_state_t s);
 unsigned fdir_gen_transition_id(unsigned index);     /* index < FDIR_GEN_N_TRANSITIONS */

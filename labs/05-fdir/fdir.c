@@ -98,6 +98,7 @@ const char *fdir_event_name(uint16_t evt_id) {
     case EVT_RECOVERED:       return "RECOVERED";
     case EVT_SAFE_ENTER:      return "SAFE_ENTER";
     case EVT_SAFE_EXIT:       return "SAFE_EXIT";
+    default:                  break;
     }
     return "?";
 }

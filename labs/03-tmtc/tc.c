@@ -7,8 +7,8 @@ uint16_t tc_crc16(const uint8_t *buf, size_t len) {
     for (size_t i = 0; i < len; ++i) {
         crc = (uint16_t) (crc ^ ((uint16_t) buf[i] << 8));
         for (int b = 0; b < 8; ++b) {
-            crc = (crc & 0x8000u) ? (uint16_t) ((crc << 1) ^ 0x1021u)
-                                  : (uint16_t) (crc << 1);
+            unsigned shifted = (unsigned) crc << 1;   /* unsigned: no int promotion surprises */
+            crc = (uint16_t) ((crc & 0x8000u) ? (shifted ^ 0x1021u) : shifted);
         }
     }
     return crc;

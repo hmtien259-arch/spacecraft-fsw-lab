@@ -11,6 +11,9 @@
  */
 #include "uplink.h"
 
+#ifdef NDEBUG
+#error "the self checks are written with assert(): building them with NDEBUG would make every check pass vacuously"
+#endif
 #include <assert.h>
 #include <stdio.h>
 #include <string.h>
@@ -267,6 +270,28 @@ static void check_never_execute_unvalidated(void) {
            cases);
 }
 
+/* TMTC-REQ-004 on the real code: the report builders own the 14-bit TM sequence count, so
+ * start it two below the wrap and read it back from the packets they produce. (The Session 7
+ * check in main.c exercises a local loop, not this code.) */
+static void check_tm_sequence_wrap(void) {
+    uint8_t buf[VERIFY_REPORT_MAX_LEN];
+    uint16_t seq = 16382u;
+    const uint16_t expect[] = { 16382u, 16383u, 0u, 1u };
+
+    for (size_t i = 0; i < sizeof(expect) / sizeof(expect[0]); ++i) {
+        size_t n = build_verification(buf, CCSDS_APID_CMD, &seq, PUS_VER_ACCEPT_OK, 0x1865u, 0xC001u, 0);
+        assert(n != 0);
+        ccsds_pri_hdr h;
+        ccsds_parse_primary(buf, &h);
+        assert(h.seq_count == expect[i]);
+        assert(seq == (uint16_t) ((expect[i] + 1u) % 16384u));
+    }
+    /* A refused build must not consume a sequence number. */
+    uint16_t before = seq;
+    assert(build_verification(buf, CCSDS_APID_CMD, &seq, 99u, 0, 0, 0) == 0u && seq == before);
+    printf("PASS TM sequence count wraps 16383 -> 0 in the report builders; refused build keeps it\n\n");
+}
+
 void uplink_selfcheck(void) {
     printf("=== Session 8: telecommand path self checks ===\n");
     check_crc_and_roundtrip();
@@ -275,5 +300,6 @@ void uplink_selfcheck(void) {
     check_unknown_command();
     check_malformed();
     check_never_execute_unvalidated();
+    check_tm_sequence_wrap();
     printf("all Session 8 uplink self checks passed\n");
 }

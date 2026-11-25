@@ -90,14 +90,27 @@ const char *fdir_gen_transition_text(unsigned index) {
     return (index < FDIR_GEN_N_TRANSITIONS) ? fdir_gen_texts[index] : "?";
 }
 
+int fdir_gen_ctx_same(const fdir_gen_ctx *a, const fdir_gen_ctx *b) {
+    return (a->state == b->state) &
+           (a->attempts == b->attempts) &
+           (a->fault_streak == b->fault_streak) &
+           (a->prev_worst == b->prev_worst) &
+           (a->source_mask == b->source_mask) &
+           (a->task_mask == b->task_mask) &
+           (a->n_faults == b->n_faults) &
+           (a->n_safe_entries == b->n_safe_entries) &
+           (a->n_filtered == b->n_filtered) &
+           (a->confirm_cycles == b->confirm_cycles);
+}
+
 const char *fdir_gen_state_name(fdir_gen_state_t s) {
-    const char *name = "?";
+    const char *name;
     switch (s) {
     case FDIR_GEN_STATE_NOMINAL: name = "NOMINAL"; break;
     case FDIR_GEN_STATE_RECOVERING: name = "RECOVERING"; break;
     case FDIR_GEN_STATE_SAFE: name = "SAFE"; break;
     case FDIR_GEN_STATE_MONITORING: name = "MONITORING"; break;
-    default: break;
+    default: name = "?"; break;
     }
     return name;
 }
