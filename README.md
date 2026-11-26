@@ -17,7 +17,7 @@ spacecraft-fsw-lab/
 |   |-- 05-fdir/          # Session 10: health monitors, watchdog, graduated FDIR
 |   `-- 06-mbd/           # Session 11: FDIR as a model, generated C, back-to-back tests
 |-- .github/workflows/    # Session 12: CI (build, test, sanitizers, static analysis, coverage)
-|-- capstone/             # capstone flight software stack
+|-- capstone/             # Session 13+: capstone (frozen requirements, scenarios, traceability, src, tests, report)
 `-- tools/scripts/        # helper scripts (dependency fetch, build helpers)
 ```
 
@@ -46,6 +46,8 @@ SAN=1 bash tools/run_tests.sh        # same under AddressSanitizer + UBSan
 bash tools/coverage.sh               # FDIR line and branch coverage with floors
 bash tools/static_analysis.sh        # clang-tidy, any finding fails
 bash tools/demo_gates.sh             # proves each gate goes red on an injected fault
+bash tools/check_traceability.sh     # lab and capstone requirement traceability (--strict: acceptance)
+bash tools/capstone_gates.sh all     # capstone tests, coverage, cppcheck, report
 ```
 
 `.github/workflows/ci.yml` runs all of these on every push and pull request. What blocks a merge
@@ -54,4 +56,6 @@ and why is in `docs/11-ci-vv.md`; the requirement-to-test matrix is
 
 ## Status
 
-Sessions 2 through 12: Foundation and Core complete, model-based development and V&V / CI done; the capstone is next.
+Sessions 2 through 12: Foundation and Core complete, model-based development and V&V / CI done.
+Session 13: capstone scope baseline frozen (`capstone/`, `docs/12-capstone-baseline.md`); integration
+starts in Session 14 with SCN-02.

@@ -4,7 +4,8 @@
 # For every case it copies the repository to a scratch directory, injects one fault, runs the gate
 # that is supposed to catch it, and reports RED (caught) or GREEN (missed). A gate that has never
 # been seen failing is not evidence of anything. The last two cases show why the sanitizer job
-# exists: the same memory error passes the plain build and is caught only under ASan.
+# exists: the same memory error passes the plain build and is caught only under ASan. The capstone
+# cases (Session 13) end with the brief's grep sketch, shown GREEN on purpose: it cannot fail.
 #
 #   bash tools/demo_gates.sh          # exit 0 only if every case except the marked "expected GREEN" is RED
 set -uo pipefail
@@ -56,5 +57,21 @@ MEMX=$'void ccsds_parse_primary(const uint8_t *buf, ccsds_pri_hdr *h) {\n    vol
 case_ GREEN "memory error that changes no result: plain build"       "$T" labs/03-tmtc/ccsds.c "$MEM" "$MEMX"
 case_ RED   "the same memory error: sanitizer build"                 "SAN=1 bash tools/run_tests.sh" labs/03-tmtc/ccsds.c "$MEM" "$MEMX"
 
+# Capstone gates (Session 13).
+C="bash tools/check_traceability.sh"
+G="bash tools/capstone_gates.sh"
+case_ RED   "capstone requirement added, no traceability row"        "$C" capstone/requirements.md "| SW-FI-02 | With no" $'| SW-FI-03 | untested new one | test | new |\n| SW-FI-02 | With no'
+case_ RED   "capstone row marked verified with no test"              "$C" capstone/traceability.md "| - | SCN-02 | pending | test_conn" "| - | SCN-02 | verified | test_conn"
+case_ RED   "capstone test named in traceability, never called"      "$C" capstone/tests/test_fault_inject.c $'    test_fault_inject_isolation();\n' ""
+case_ RED   "scenario coverage disagrees with traceability"          "$C" capstone/scenarios.md "| SYS-02, SW-TC-02, SW-TC-03 |" "| SYS-02, SW-TC-02 |"
+case_ RED   "fault injector visible in the nominal build (SW-FI-01)" "$G test" capstone/tests/fault_inject.h "#if defined(FSW_TEST)" "#if 1"
+case_ RED   "report outline loses a required section"                "$G report" capstone/report/outline.md "## 7. Limitations" "## 7. Hardware"
+case_ RED   "acceptance: a requirement still pending (--strict)"     "$C --strict" capstone/README.md "Capstone" "Capstone"
+case_ RED   "acceptance: coverage gate not armed"                    "REQUIRE_ARMED=1 $G coverage" capstone/README.md "Capstone" "Capstone"
+# The Session 13 brief's sketch, run as written (GNU grep): it passes on today's tree, where 27
+# requirements have no test, because traceability.md lists every ID. Expected GREEN = it cannot fail.
+SKETCH='for id in $(/usr/bin/grep -oE "(SYS|SW-[A-Z]+|)-[0-9]+" capstone/requirements.md | sort -u); do /usr/bin/grep -rqs "$id" capstone/tests capstone/traceability.md || { echo "UNTESTED: $id"; exit 1; }; done'
+case_ GREEN "brief's grep sketch, 27 requirements untested"         "$SKETCH" capstone/README.md "Capstone" "Capstone"
+
 if [ $missed -ne 0 ]; then echo "demo_gates: a gate did not behave as expected" >&2; exit 1; fi
-echo "demo_gates: every gate went red on its fault (the plain build missing the memory error is the expected GREEN)"
+echo "demo_gates: every gate went red on its fault (the two expected GREENs are the plain build missing the memory error and the brief's grep sketch)"
